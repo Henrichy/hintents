@@ -235,6 +235,16 @@ Local WASM Replay Mode:
 		ctx := cmd.Context()
 		txHash := cmdArgs[0]
 
+		// Load persisted viewer state for this transaction (best-effort).
+		var uiStore *session.UIStateStore
+		if s, err := session.NewUIStateStore(); err == nil {
+			uiStore = s
+			defer uiStore.Close()
+			if prev, err := uiStore.LoadSectionState(ctx, txHash); err == nil && len(prev) > 0 {
+				fmt.Printf("Restoring viewer state: last session showed [%s] for this transaction.\n", strings.Join(prev, ", "))
+			}
+		}
+
 		// Initialize OpenTelemetry if enabled
 		if tracingEnabled {
 			cleanup, err := telemetry.Init(ctx, telemetry.Config{
@@ -526,13 +536,20 @@ Local WASM Replay Mode:
 		}
 
 		// Analysis: Token Flows
+		hasTokenFlows := false
 		if report, err := tokenflow.BuildReport(resp.EnvelopeXdr, resp.ResultMetaXdr); err == nil && len(report.Agg) > 0 {
+			hasTokenFlows = true
 			fmt.Printf("\nToken Flow Summary:\n")
 			for _, line := range report.SummaryLines() {
 				fmt.Printf("  %s\n", line)
 			}
 			fmt.Printf("\nToken Flow Chart (Mermaid):\n")
 			fmt.Println(report.MermaidFlowchart())
+		}
+
+		// Persist viewer state so the next debug of this transaction restores context.
+		if uiStore != nil {
+			_ = uiStore.SaveSectionState(ctx, txHash, collectVisibleSections(lastSimResp, findings, hasTokenFlows))
 		}
 
 		// Session Management
@@ -887,6 +904,28 @@ func diffResults(res1, res2 *simulator.SimulationResponse, net1, net2 string) {
 			fmt.Printf("    %s: %s\n", net2, ev2)
 		}
 	}
+}
+
+// collectVisibleSections returns the names of output sections that contained
+// data during the last simulation run.
+func collectVisibleSections(resp *simulator.SimulationResponse, findings []security.Finding, hasTokenFlows bool) []string {
+	var sections []string
+	if resp.BudgetUsage != nil {
+		sections = append(sections, "budget")
+	}
+	if len(resp.DiagnosticEvents) > 0 {
+		sections = append(sections, "events")
+	}
+	if len(resp.Logs) > 0 {
+		sections = append(sections, "logs")
+	}
+	if len(findings) > 0 {
+		sections = append(sections, "security")
+	}
+	if hasTokenFlows {
+		sections = append(sections, "tokenflow")
+	}
+	return sections
 }
 
 func init() {
