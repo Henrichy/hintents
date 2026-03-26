@@ -16,8 +16,9 @@ type SimulationRequest struct {
 	MockBaseFee      *uint32           `json:"mock_base_fee,omitempty"`
 	MockGasPrice     *uint64           `json:"mock_gas_price,omitempty"`
 	MemoryLimit      *uint64           `json:"memory_limit,omitempty"`
-	EnableCoverage   bool              `json:"enable_coverage,omitempty"`
-	CoverageLCOVPath *string           `json:"coverage_lcov_path,omitempty"`
+	EnableCoverage              bool              `json:"enable_coverage,omitempty"`
+	CoverageLCOVPath            *string           `json:"coverage_lcov_path,omitempty"`
+	EnableOptimizationAdvisor   bool              `json:"enable_optimization_advisor,omitempty"`
 
 	RestorePreamble map[string]interface{} `json:"restore_preamble,omitempty"`
 
