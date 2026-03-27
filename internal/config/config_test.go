@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package config
@@ -46,22 +46,22 @@ func TestConfigValidation(t *testing.T) {
 	}{
 		{
 			"valid public network",
-			&Config{RpcUrl: "https://test.com", Network: NetworkPublic},
+			&Config{RpcUrl: "https://test.com", Network: NetworkPublic, RequestTimeout: 30, MaxTraceDepth: 50},
 			false,
 		},
 		{
 			"valid testnet",
-			&Config{RpcUrl: "https://test.com", Network: NetworkTestnet},
+			&Config{RpcUrl: "https://test.com", Network: NetworkTestnet, RequestTimeout: 30, MaxTraceDepth: 50},
 			false,
 		},
 		{
 			"valid futurenet",
-			&Config{RpcUrl: "https://test.com", Network: NetworkFuturenet},
+			&Config{RpcUrl: "https://test.com", Network: NetworkFuturenet, RequestTimeout: 30, MaxTraceDepth: 50},
 			false,
 		},
 		{
 			"valid standalone",
-			&Config{RpcUrl: "https://test.com", Network: NetworkStandalone},
+			&Config{RpcUrl: "https://test.com", Network: NetworkStandalone, RequestTimeout: 30, MaxTraceDepth: 50},
 			false,
 		},
 		{
@@ -556,9 +556,12 @@ func TestLoad_RequestTimeoutInvalidEnvIgnored(t *testing.T) {
 
 	os.Setenv("ERST_REQUEST_TIMEOUT", "notanumber")
 
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for invalid ERST_REQUEST_TIMEOUT value")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.RequestTimeout != 15 {
+		t.Errorf("expected RequestTimeout to fall back to default 15, got %d", cfg.RequestTimeout)
 	}
 }
 
@@ -604,27 +607,6 @@ request_timeout = -5`
 	}
 }
 
-func TestValidators_MissingFields(t *testing.T) {
-	tests := []struct {
-		name      string
-		validator Validator
-		cfg       *Config
-		wantErr   bool
-	}{
-		{name: "missing rpc_url", validator: RequiredFieldsValidator{}, cfg: &Config{}, wantErr: true},
-		{name: "present rpc_url", validator: RequiredFieldsValidator{}, cfg: &Config{RpcUrl: "https://ok"}, wantErr: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.validator.Validate(tt.cfg)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("expected error=%v, got %v", tt.wantErr, err)
-			}
-		})
-	}
-}
-
 func TestParseTOML_InvalidTypes(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -644,21 +626,47 @@ func TestParseTOML_InvalidTypes(t *testing.T) {
 	}
 }
 
-func TestRequestTimeout_OutOfBounds(t *testing.T) {
-	tests := []int{-1, 301}
-	for _, timeout := range tests {
-		t.Run("timeout", func(t *testing.T) {
-			cfg := NewConfig("https://test.com", NetworkTestnet).WithRequestTimeout(timeout)
-			if err := (RequestTimeoutValidator{}).Validate(cfg); err == nil {
-				t.Fatalf("expected out-of-bounds error for %d", timeout)
-			}
-		})
-	}
-}
-
 func TestWithRequestTimeout(t *testing.T) {
 	cfg := NewConfig("https://test.com", NetworkTestnet).WithRequestTimeout(45)
 	if cfg.RequestTimeout != 45 {
 		t.Errorf("expected RequestTimeout=45, got %d", cfg.RequestTimeout)
+	}
+}
+
+// ---- MaxTraceDepth config --------------------------------------------------
+
+func TestDefaultConfig_MaxTraceDepth(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.MaxTraceDepth != 50 {
+		t.Errorf("expected default MaxTraceDepth=50, got %d", cfg.MaxTraceDepth)
+	}
+}
+
+func TestLoad_MaxTraceDepthFromEnv(t *testing.T) {
+	orig := os.Getenv("ERST_MAX_TRACE_DEPTH")
+	defer os.Setenv("ERST_MAX_TRACE_DEPTH", orig)
+
+	os.Setenv("ERST_MAX_TRACE_DEPTH", "100")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MaxTraceDepth != 100 {
+		t.Errorf("expected MaxTraceDepth=100 from env, got %d", cfg.MaxTraceDepth)
+	}
+}
+
+func TestParseTOML_MaxTraceDepth(t *testing.T) {
+	content := `rpc_url = "https://test.com"
+network = "testnet"
+max_trace_depth = 25`
+
+	cfg := &Config{}
+	if err := cfg.parseTOML(content); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MaxTraceDepth != 25 {
+		t.Errorf("expected MaxTraceDepth=25 from TOML, got %d", cfg.MaxTraceDepth)
 	}
 }

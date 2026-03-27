@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package simulator
@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -327,6 +328,7 @@ func (lb *limitedBuffer) Write(p []byte) (n int, err error) {
 }
 
 func (r *Runner) Close() error {
+
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()

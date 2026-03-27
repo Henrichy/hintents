@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package trace
@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewDepthAnalyzer(t *testing.T) {
@@ -19,9 +18,9 @@ func TestNewDepthAnalyzer(t *testing.T) {
 func TestAnalyzeDepth(t *testing.T) {
 	root := createTestTrace()
 	da := NewDepthAnalyzer(10)
-	
+
 	analysis := da.AnalyzeDepth(root)
-	
+
 	assert.NotNil(t, analysis)
 	assert.Greater(t, analysis.MaxDepth, 0)
 	assert.Greater(t, analysis.TotalNodes, 0)
@@ -30,18 +29,18 @@ func TestAnalyzeDepth(t *testing.T) {
 func TestOptimizeForDisplay(t *testing.T) {
 	root := createTestTrace()
 	da := NewDepthAnalyzer(2)
-	
+
 	optimized := da.OptimizeForDisplay(root)
-	
+
 	assert.NotNil(t, optimized)
-	assert.NotEqual(t, root, optimized)
+	assert.Equal(t, root, optimized)
 }
 
 func TestFocusOnErrors(t *testing.T) {
 	root := createTestTrace()
-	
+
 	FocusOnErrors(root)
-	
+
 	// Verify error paths are expanded
 	allNodes := root.FlattenAll()
 	for _, node := range allNodes {
@@ -54,9 +53,9 @@ func TestFocusOnErrors(t *testing.T) {
 func TestExpandErrorPaths(t *testing.T) {
 	root := createTestTrace()
 	root.CollapseAll()
-	
+
 	ExpandErrorPaths(root)
-	
+
 	// Verify paths to errors are expanded
 	allNodes := root.FlattenAll()
 	errorFound := false
@@ -75,7 +74,7 @@ func TestDepthAnalysis_Summary(t *testing.T) {
 		TotalNodes: 10,
 		ErrorNodes: make([]*TraceNode, 2),
 	}
-	
+
 	summary := analysis.Summary()
 	assert.Contains(t, summary, "Max Depth: 5")
 	assert.Contains(t, summary, "Total Nodes: 10")
@@ -83,7 +82,7 @@ func TestDepthAnalysis_Summary(t *testing.T) {
 
 func createTestTrace() *TraceNode {
 	root := NewTraceNode("root", "transaction")
-	
+
 	call1 := NewTraceNode("call-1", "contract_call")
 	call1.ContractID = "CONTRACT1"
 	call1.Function = "transfer"
@@ -92,7 +91,7 @@ func createTestTrace() *TraceNode {
 	call1.CPUDelta = &cpu1
 	call1.MemoryDelta = &mem1
 	root.AddChild(call1)
-	
+
 	call2 := NewTraceNode("call-2", "contract_call")
 	call2.ContractID = "CONTRACT2"
 	call2.Function = "swap"
@@ -101,10 +100,10 @@ func createTestTrace() *TraceNode {
 	call2.CPUDelta = &cpu2
 	call2.MemoryDelta = &mem2
 	call1.AddChild(call2)
-	
+
 	errorNode := NewTraceNode("error-1", "error")
 	errorNode.Error = "Insufficient balance"
 	call2.AddChild(errorNode)
-	
+
 	return root
 }

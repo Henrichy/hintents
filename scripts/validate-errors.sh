@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Erst Users
+# Copyright 2026 Erst Users
 # SPDX-License-Identifier: Apache-2.0
 
 # Validate error standardization implementation
@@ -79,8 +79,3 @@ else
 fi
 
 echo "All validation checks passed!"
-echo "Error standardization complete:"
-echo "   - Sentinel errors defined for comparison with errors.Is"
-echo "   - Wrap functions follow Go error wrapping best practices"
-echo "   - All packages refactored to use standardized errors"
-echo "   - Tests updated to use standardized error constants"

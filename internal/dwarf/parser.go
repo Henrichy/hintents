@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 // Package dwarf provides DWARF debug information parsing for Soroban contract debugging.
@@ -111,6 +111,8 @@ func NewParser(data []byte) (*Parser, error) {
 func parseWASM(data []byte) (*Parser, error) {
 	sections := parseWASMSections(data)
 
+	var dwarfData *dwarf.Data
+	var err error
 	infoSec, ok := sections[".debug_info"]
 	if !ok || len(infoSec) == 0 {
 		return nil, ErrNoDebugInfo
@@ -120,7 +122,8 @@ func parseWASM(data []byte) (*Parser, error) {
 	rangesSec, _ := sections[".debug_ranges"]
 	strSec, _ := sections[".debug_str"]
 
-	dwarfData, err := dwarf.New(abbrevSec, nil, nil, infoSec, lineSec, nil, rangesSec, strSec)
+	dwarfData, err = dwarf.New(abbrevSec, nil, nil, infoSec, lineSec, nil, rangesSec, strSec)
+
 	if dwarfData == nil || err != nil {
 		// No DWARF info in WASM
 		return nil, ErrNoDebugInfo

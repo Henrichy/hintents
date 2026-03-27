@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -19,7 +19,7 @@ import (
 // deterministic hashing across different platforms and scenarios.
 
 func main() {
-	fmt.Println("=== Canonical JSON Serialization Demo ===\n")
+	fmt.Println("=== Canonical JSON Serialization Demo ===")
 
 	// Generate a key pair for signing
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -37,6 +37,7 @@ func main() {
 		[]string{"event1", "event2", "event3"},
 		[]string{"log1", "log2"},
 		privateKeyHex,
+		nil,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -62,18 +63,19 @@ func main() {
 
 	hashes := make([]string, 5)
 	for i := 0; i < 5; i++ {
-		log, err := cmd.Generate(
+		genLog, err := cmd.Generate(
 			"tx-hash-12345",
 			"envelope-xdr-data",
 			"result-meta-xdr-data",
 			[]string{"event1", "event2", "event3"},
 			[]string{"log1", "log2"},
 			privateKeyHex,
+			nil,
 		)
 		if err != nil {
 			log.Fatal(err)
 		}
-		hashes[i] = log.TraceHash
+		hashes[i] = genLog.TraceHash
 	}
 
 	allSame := true
@@ -144,23 +146,9 @@ func main() {
 
 	// Example 8: Cross-platform hash consistency
 	fmt.Println("8. Cross-platform consistency guarantee...")
-	payload1 := cmd.Payload{
-		EnvelopeXdr:   "envelope",
-		ResultMetaXdr: "result",
-		Events:        []string{"e1"},
-		Logs:          []string{"l1"},
-	}
 
-	// Simulate different field assignment order (same data)
-	payload2 := cmd.Payload{
-		Logs:          []string{"l1"},
-		Events:        []string{"e1"},
-		ResultMetaXdr: "result",
-		EnvelopeXdr:   "envelope",
-	}
-
-	log1, _ := cmd.Generate("tx1", "envelope", "result", []string{"e1"}, []string{"l1"}, privateKeyHex)
-	log2, _ := cmd.Generate("tx1", "envelope", "result", []string{"e1"}, []string{"l1"}, privateKeyHex)
+	log1, _ := cmd.Generate("tx1", "envelope", "result", []string{"e1"}, []string{"l1"}, privateKeyHex, nil)
+	log2, _ := cmd.Generate("tx1", "envelope", "result", []string{"e1"}, []string{"l1"}, privateKeyHex, nil)
 
 	if log1.TraceHash == log2.TraceHash {
 		fmt.Println("   [OK] Same data produces same hash regardless of field order")

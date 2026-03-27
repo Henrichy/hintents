@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 //! Tests for signature verification mocking functionality
@@ -15,6 +15,7 @@ fn test_signature_verification_mock_true() {
         wasm_path: None,
         enable_optimization_advisor: false,
         profile: None,
+        _timestamp: None,
         timestamp: String::new(),
         mock_base_fee: None,
         mock_gas_price: None,
@@ -41,6 +42,7 @@ fn test_signature_verification_mock_false() {
         wasm_path: None,
         enable_optimization_advisor: false,
         profile: None,
+        _timestamp: None,
         timestamp: String::new(),
         mock_base_fee: None,
         mock_gas_price: None,
@@ -67,6 +69,7 @@ fn test_signature_verification_mock_disabled() {
         wasm_path: None,
         enable_optimization_advisor: false,
         profile: None,
+        _timestamp: None,
         timestamp: String::new(),
         mock_base_fee: None,
         mock_gas_price: None,

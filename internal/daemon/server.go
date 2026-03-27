@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package daemon
@@ -108,17 +108,12 @@ func (s *Server) authenticate(r *http.Request) bool {
 	}
 
 	auth := r.Header.Get("Authorization")
-	if auth == "" {
+	if !strings.HasPrefix(auth, "Bearer ") {
 		return false
 	}
 
-	// Support "Bearer <token>" format
-	if strings.HasPrefix(auth, "Bearer ") {
-		token := strings.TrimPrefix(auth, "Bearer ")
-		return token == s.authToken
-	}
-
-	return auth == s.authToken
+	token := strings.TrimPrefix(auth, "Bearer ")
+	return token == s.authToken
 }
 
 // DebugTransaction handles debug_transaction RPC calls

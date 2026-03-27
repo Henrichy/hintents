@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dotandev/hintents/internal/config"
+	"github.com/dotandev/hintents/internal/decenstorage"
 	"github.com/dotandev/hintents/internal/decoder"
 	"github.com/dotandev/hintents/internal/errors"
 	"github.com/dotandev/hintents/internal/logger"
@@ -35,6 +36,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"go.opentelemetry.io/otel/attribute"
 )
+
 var (
 	networkFlag         string
 	rpcURLFlag          string
@@ -64,6 +66,8 @@ var (
 	mockTimeFlag        int64
 	mockBaseFeeFlag     uint32
 	mockGasPriceFlag    uint64
+	asyncFlag           bool
+	asyncTimeoutFlag    int
 )
 
 // DebugCommand holds dependencies for the debug command
@@ -472,7 +476,7 @@ Local WASM Replay Mode:
 				}
 				applySimulationFeeMocks(simReq)
 
-				simResp, err = runner.Run(simReq)
+				simResp, err = runner.Run(ctx, simReq)
 				if err != nil {
 					return errors.WrapSimulationFailed(err, "")
 				}
@@ -510,7 +514,7 @@ Local WASM Replay Mode:
 						Timestamp:     ts,
 					}
 					applySimulationFeeMocks(primaryReq)
-					primaryResult, primaryErr = runner.Run(primaryReq)
+					primaryResult, primaryErr = runner.Run(ctx, primaryReq)
 				}()
 
 				go func() {
@@ -550,7 +554,7 @@ Local WASM Replay Mode:
 						Timestamp:     ts,
 					}
 					applySimulationFeeMocks(compareReq)
-					compareResult, compareErr = runner.Run(compareReq)
+					compareResult, compareErr = runner.Run(ctx, compareReq)
 				}()
 
 				wg.Wait()
@@ -583,9 +587,16 @@ Local WASM Replay Mode:
 		// Analysis: Error Suggestions (Heuristic-based)
 		if len(lastSimResp.Events) > 0 {
 			suggestionEngine := decoder.NewSuggestionEngine()
-			
+
+			// Load config to get MaxTraceDepth
+			cfg, _ := config.Load()
+			maxDepth := 50
+			if cfg != nil {
+				maxDepth = cfg.MaxTraceDepth
+			}
+
 			// Decode events for analysis
-			callTree, err := decoder.DecodeEvents(lastSimResp.Events)
+			callTree, err := decoder.DecodeEvents(lastSimResp.Events, maxDepth)
 			if err == nil && callTree != nil {
 				suggestions := suggestionEngine.AnalyzeCallTree(callTree)
 				if len(suggestions) > 0 {
@@ -799,7 +810,7 @@ func runLocalWasmReplay() error {
 
 	// Run simulation
 	fmt.Printf("%s Executing contract locally...\n", visualizer.Symbol("play"))
-	resp, err := runner.Run(req)
+	resp, err := runner.Run(context.Background(), req)
 	if err != nil {
 		fmt.Printf("%s Technical failure: %v\n", visualizer.Error(), err)
 		return err

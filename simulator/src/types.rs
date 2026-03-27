@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(dead_code)]
@@ -16,8 +16,11 @@ pub struct SimulationRequest {
     pub ledger_entries: Option<HashMap<String, String>>,
     pub contract_wasm: Option<String>,
     pub wasm_path: Option<String>, // Added for local loading
+    #[serde(default)]
+    pub no_cache: bool,
     pub enable_optimization_advisor: bool,
     pub profile: Option<bool>,
+    #[serde(default)]
     pub _timestamp: Option<i64>,
     pub resource_calibration: Option<ResourceCalibration>,
     /// RFC 3339 timestamp supplied by the caller.  Preserved for future use
@@ -32,7 +35,6 @@ pub struct SimulationRequest {
     pub enable_coverage: bool,
     #[serde(default)]
     pub coverage_lcov_path: Option<String>,
-    pub resource_calibration: Option<ResourceCalibration>,
     /// Optional hard memory limit in bytes. If set, the simulator will panic
     /// when memory consumption exceeds this limit, simulating live network constraints.
     pub memory_limit: Option<u64>,

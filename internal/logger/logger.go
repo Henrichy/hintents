@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package logger
@@ -39,7 +39,16 @@ func ParseLevel(levelStr string) slog.Level {
 	case "TRACE":
 		return LevelTrace
 	case "DEBUG":
-	return ParseLogLevel(os.Getenv("ERST_LOG_LEVEL"))
+		return slog.LevelDebug
+	case "INFO":
+		return slog.LevelInfo
+	case "WARN", "WARNING":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
 // ParseLogLevel converts a human-readable level string (e.g. "debug", "info",

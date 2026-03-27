@@ -1,6 +1,4 @@
-//go:build ignore
-
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package rpc
@@ -14,6 +12,8 @@ import (
 	"testing"
 	"time"
 )
+
+const validKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
 
 func newRetryHTTPClient() *http.Client {
 	cfg := RetryConfig{

@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package errors
@@ -302,13 +302,6 @@ func WrapRateLimitExceeded() error {
 }
 
 func WrapConfigError(msg string, err error) error {
-	if err != nil {
-		return &ErstError{
-			Code:    ErstConfigFailed,
-			Message: msg + ": " + err.Error(),
-			OrigErr: err,
-		}
-	}
 	return &ErstError{
 		Code:    ErstConfigFailed,
 		Message: msg,
@@ -386,6 +379,7 @@ const (
 
 	// Shared / general
 	CodeValidationFailed ErstErrorCode = "VALIDATION_FAILED"
+	CodeConfigFailed     ErstErrorCode = "CONFIG_ERROR"
 	CodeUnknown          ErstErrorCode = "UNKNOWN"
 )
 
@@ -411,6 +405,7 @@ var codeToSentinel = map[ErstErrorCode]error{
 	CodeSimLogicError:          ErrSimulationLogicError,
 	CodeSimProtoUnsup:          ErrProtocolUnsupported,
 	CodeValidationFailed:       ErrValidationFailed,
+	CodeConfigFailed:           ErrConfigFailed,
 }
 
 // newErstError is the internal constructor.

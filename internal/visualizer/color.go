@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package visualizer
@@ -6,15 +6,13 @@ package visualizer
 import (
 	"os"
 
-	"github.com/dotandev/hintents/internal/terminal"
 	"github.com/mattn/go-isatty"
 )
 
-var defaultRenderer terminal.Renderer = terminal.NewANSIRenderer()
+// ANSI SGR (Select Graphic Rendition) escape codes for terminal colors.
+// Redundant constants removed as they are defined in ansi.go
 
 // ColorEnabled reports whether ANSI color output should be used.
-// Checks NO_COLOR and TERM=dumb environment variables on every call
-// so that tests can control color via env vars dynamically.
 func ColorEnabled() bool {
 	// NO_COLOR must always take precedence.
 	if _, ok := os.LookupEnv("NO_COLOR"); ok {
@@ -74,6 +72,7 @@ func Colorize(text string, color string) string {
 
 // ContractBoundary returns a visual separator for cross-contract call transitions.
 func ContractBoundary(fromContract, toContract string) string {
+
 	line := "--- contract boundary: " + fromContract + " -> " + toContract + " ---"
 	if !ColorEnabled() {
 		return line
@@ -83,17 +82,17 @@ func ContractBoundary(fromContract, toContract string) string {
 
 // Success returns a success indicator.
 func Success() string {
-	return defaultRenderer.Success()
+	return Colorize("[OK]", "green")
 }
 
 // Warning returns a warning indicator.
 func Warning() string {
-	return defaultRenderer.Warning()
+	return Colorize("[!]", "yellow")
 }
 
 // Error returns an error indicator.
 func Error() string {
-	return defaultRenderer.Error()
+	return Colorize("[FAIL]", "red")
 }
 
 // Info returns an info indicator.

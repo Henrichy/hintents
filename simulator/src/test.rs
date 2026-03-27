@@ -1,4 +1,4 @@
-﻿// Copyright 2025 Erst Users
+﻿// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(test)]
@@ -54,7 +54,9 @@ mod ledger_state_injection_tests {
     fn test_decode_ledger_key_invalid_base64() {
         let result = decode_ledger_key("not-valid-base64!!!");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to decode LedgerKey Base64"));
+        assert!(result
+            .unwrap_err()
+            .contains("Failed to decode LedgerKey Base64"));
     }
 
     #[test]
@@ -63,7 +65,9 @@ mod ledger_state_injection_tests {
         let invalid_xdr = base64::engine::general_purpose::STANDARD.encode(b"invalid xdr data");
         let result = decode_ledger_key(&invalid_xdr);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to parse LedgerKey XDR"));
+        assert!(result
+            .unwrap_err()
+            .contains("Failed to parse LedgerKey XDR"));
     }
 
     #[test]
@@ -355,8 +359,7 @@ mod ledger_state_injection_tests {
 
         // Decode from base64
         let decoded_key = decode_ledger_key(&key_xdr).expect("Key decode should succeed");
-        let decoded_entry =
-            decode_ledger_entry(&entry_xdr).expect("Entry decode should succeed");
+        let decoded_entry = decode_ledger_entry(&entry_xdr).expect("Entry decode should succeed");
 
         // Inject
         let result = inject_ledger_entry(&host, &decoded_key, &decoded_entry);
@@ -408,8 +411,10 @@ mod contract_execution_tests {
             ledger_entries: None,
             contract_wasm: None,
             wasm_path: None,
+            no_cache: false,
             enable_optimization_advisor: false,
             profile: None,
+            _timestamp: None,
             timestamp: String::new(),
             mock_base_fee: None,
             mock_gas_price: None,
@@ -795,7 +800,12 @@ mod contract_execution_tests {
         println!("Comparison: {}", report.comparison_to_baseline);
         println!("Optimization Tips:");
         for (i, tip) in report.tips.iter().enumerate() {
-            println!("{}. [{}] {}", i + 1, tip.severity.to_uppercase(), tip.category);
+            println!(
+                "{}. [{}] {}",
+                i + 1,
+                tip.severity.to_uppercase(),
+                tip.category
+            );
             println!("   {}", tip.message);
             println!("   Potential Savings: {}", tip.estimated_savings);
             if let Some(location) = &tip.code_location {
@@ -961,7 +971,12 @@ mod contract_execution_tests {
         println!("Status: {}", report.comparison_to_baseline);
         println!("Optimization Tips:");
         for (i, tip) in report.tips.iter().enumerate() {
-            println!("{}. [{}] {}", i + 1, tip.severity.to_uppercase(), tip.category);
+            println!(
+                "{}. [{}] {}",
+                i + 1,
+                tip.severity.to_uppercase(),
+                tip.category
+            );
             println!("   {}", tip.message);
             println!("   Potential Savings: {}", tip.estimated_savings);
             if let Some(location) = &tip.code_location {

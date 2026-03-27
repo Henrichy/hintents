@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/dotandev/hintents/internal/db"
+	"github.com/dotandev/hintents/internal/errors"
 	"github.com/dotandev/hintents/internal/session"
 	"github.com/spf13/cobra"
 )

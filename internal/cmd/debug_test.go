@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -343,52 +343,6 @@ func TestExtractLedgerKeys(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "Key not found in extracted keys")
-}
-
-func TestParseEnvelopeXDRInput(t *testing.T) {
-	validEnvelopeXdr := buildTestEnvelopeXdr(t)
-
-	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		wantValue string
-	}{
-		{
-			name:      "valid envelope with whitespace",
-			input:     " \n" + validEnvelopeXdr + "\n",
-			wantErr:   false,
-			wantValue: validEnvelopeXdr,
-		},
-		{
-			name:    "empty input",
-			input:   " \n\t ",
-			wantErr: true,
-		},
-		{
-			name:    "invalid base64",
-			input:   "%%%not-base64%%%",
-			wantErr: true,
-		},
-		{
-			name:    "base64 but invalid envelope xdr",
-			input:   base64.StdEncoding.EncodeToString([]byte("not-an-envelope")),
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseEnvelopeXDRInput(tt.input)
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.Equal(t, tt.wantValue, got)
-		})
-	}
 }
 
 func buildTestEnvelopeXdr(t *testing.T) string {

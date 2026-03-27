@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package config
@@ -199,6 +199,7 @@ func TestCompositeValidate_AllPass(t *testing.T) {
 		Network:        NetworkTestnet,
 		LogLevel:       "info",
 		RequestTimeout: 15,
+		MaxTraceDepth:  50,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("expected all validators to pass, got %v", err)
@@ -224,6 +225,7 @@ func BenchmarkValidators(b *testing.B) {
 		Network:        NetworkTestnet,
 		LogLevel:       "info",
 		RequestTimeout: 15,
+		MaxTraceDepth:  50,
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

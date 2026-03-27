@@ -1,10 +1,8 @@
 #!/bin/bash
-# Copyright 2025 Erst Users
+# Copyright 2026 Erst Users
 # SPDX-License-Identifier: Apache-2.0
 
 # Script to run unused code detection and cleanup
-# This script should be run after resolving the Go toolchain version mismatch
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

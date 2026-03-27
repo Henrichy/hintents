@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(test)]
@@ -52,15 +52,23 @@ mod restore_preamble_tests {
             ledger_entries: None,
             contract_wasm: None,
             wasm_path: None,
+            no_cache: false,
             enable_optimization_advisor: false,
             profile: None,
+            _timestamp: None,
+            resource_calibration: None,
             timestamp: "".to_string(),
             mock_base_fee: None,
             mock_gas_price: None,
+            mock_signature_verification: None,
+            enable_coverage: false,
+            coverage_lcov_path: None,
+            memory_limit: None,
             restore_preamble: Some(restore_preamble),
+            include_linear_memory: false,
         };
         // Simulate main logic: inject restore_preamble into host storage
-        let sim_host = crate::runner::SimHost::new(None, None);
+        let sim_host = crate::runner::SimHost::new(None, None, None);
         let host = sim_host.inner;
         if let Some(ref preamble) = req.restore_preamble {
             if let Some(obj) = preamble.as_object() {

@@ -1,4 +1,4 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package rpc
@@ -125,7 +125,7 @@ type Client struct {
 	failures        map[string]int
 	lastFailure     map[string]time.Time
 	middlewares     []Middleware
-  	// rotateCount tracks how many times rotateURL has successfully switched
+	// rotateCount tracks how many times rotateURL has successfully switched
 	// the active provider.  This is useful for metrics/observability when the
 	// client is operating in a multi‑URL failover configuration.
 	rotateCount int
@@ -230,6 +230,59 @@ func (c *Client) markSuccess(url string) {
 	c.failures[url] = 0
 }
 
+// markHorizonFailure atomically reads HorizonURL and records a failure.
+// This prevents a data race between the bare field read and rotateURL's write.
+func (c *Client) markHorizonFailure() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	url := c.HorizonURL
+	if c.failures == nil {
+		c.failures = make(map[string]int)
+	}
+	if c.lastFailure == nil {
+		c.lastFailure = make(map[string]time.Time)
+	}
+	c.failures[url]++
+	c.lastFailure[url] = time.Now()
+}
+
+// markHorizonSuccess atomically reads HorizonURL and resets its failure count.
+func (c *Client) markHorizonSuccess() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	url := c.HorizonURL
+	if c.failures == nil {
+		c.failures = make(map[string]int)
+	}
+	c.failures[url] = 0
+}
+
+// markSorobanFailure atomically reads SorobanURL and records a failure.
+func (c *Client) markSorobanFailure() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	url := c.SorobanURL
+	if c.failures == nil {
+		c.failures = make(map[string]int)
+	}
+	if c.lastFailure == nil {
+		c.lastFailure = make(map[string]time.Time)
+	}
+	c.failures[url]++
+	c.lastFailure[url] = time.Now()
+}
+
+// markSorobanSuccess atomically reads SorobanURL and resets its failure count.
+func (c *Client) markSorobanSuccess() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	url := c.SorobanURL
+	if c.failures == nil {
+		c.failures = make(map[string]int)
+	}
+	c.failures[url] = 0
+}
+
 // NewClientDefault creates a new RPC client with sensible defaults
 // Uses the Mainnet by default and accepts optional environment token
 // Deprecated: Use NewClient with functional options instead
@@ -316,6 +369,8 @@ func (c *Client) RotateCount() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.rotateCount
+}
+
 // attempts returns the number of retry attempts for failover loops (at least 1)
 func (c *Client) attempts() int {
 	if len(c.AltURLs) == 0 {
@@ -339,34 +394,35 @@ func (c *Client) startMethodTimer(ctx context.Context, method string, attributes
 }
 
 // createHTTPClient creates an HTTP client with optional authentication, a configurable timeout, and custom middlewares.
+//
+// The transport chain is constructed innermost-first:
+//
+//	[user middlewares (outermost)] → RetryTransport → authTransport → http.DefaultTransport
+//
+// User middlewares therefore observe one call per logical request (inclusive of all
+// retry attempts), which is suitable for per-request logging and header injection.
 func createHTTPClient(token string, timeout time.Duration, middlewares ...Middleware) *http.Client {
 	cfg := DefaultRetryConfig()
 
-	var baseTransport http.RoundTripper = http.DefaultTransport
+	// Innermost: base network transport.
+	var transport http.RoundTripper = http.DefaultTransport
 
-	var transport http.RoundTripper = baseTransport
+	// Auth sits just above the base so it runs on every retry attempt.
 	if token != "" {
 		transport = &authTransport{
 			token:     token,
-			transport: baseTransport,
+			transport: transport,
 		}
 	}
 
-	// Apply custom middlewares before the retry transport if you want retries to apply to them,
-	// or after if you want them to wrap the retries.
-	// Usually middlewares wrap the transport.
-	for _, mw := range middlewares {
-		if mw != nil {
-			transport = mw(transport)
-		}
-	}
-
+	// Retry wraps auth so that transient errors trigger a new authenticated attempt.
 	transport = NewRetryTransport(cfg, transport)
 
-	// Apply custom middlewares
-	for _, mw := range middlewares {
-		if mw != nil {
-			transport = mw(transport)
+	// Apply middlewares in reverse so that middlewares[0] becomes the outermost
+	// wrapper and therefore the first to intercept an outbound request.
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		if middlewares[i] != nil {
+			transport = middlewares[i](transport)
 		}
 	}
 
@@ -437,11 +493,11 @@ func (c *Client) GetTransaction(ctx context.Context, hash string) (*TransactionR
 	for attempt := 0; attempt < attempts; attempt++ {
 		resp, err := c.getTransactionAttempt(ctx, hash)
 		if err == nil {
-			c.markSuccess(c.HorizonURL)
+			c.markHorizonSuccess()
 			return resp, nil
 		}
 
-		c.markFailure(c.HorizonURL)
+		c.markHorizonFailure()
 
 		failures = append(failures, NodeFailure{URL: c.HorizonURL, Reason: err})
 
@@ -494,6 +550,7 @@ func (c *Client) getTransactionAttempt(ctx context.Context, hash string) (txResp
 
 	tx, err := c.Horizon.TransactionDetail(hash)
 	duration := time.Since(startTime)
+
 	if err != nil {
 		span.RecordError(err)
 		logger.Logger.Error("Failed to fetch transaction", "hash", hash, "error", err, "url", c.HorizonURL)
@@ -542,7 +599,6 @@ type LedgerEntryResult struct {
 	LastModifiedLedger int    `json:"lastModifiedLedgerSeq"`
 	LiveUntilLedger    int    `json:"liveUntilLedgerSeq"`
 }
-
 type GetLedgerEntriesResponse struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      int    `json:"id"`
@@ -557,6 +613,7 @@ type GetLedgerEntriesResponse struct {
 }
 
 // GetLedgerHeader fetches ledger header details for a specific sequence.
+
 // This includes essential metadata like sequence number, timestamp, protocol version,
 // and XDR-encoded header data needed for transaction simulation.
 //
@@ -585,11 +642,11 @@ func (c *Client) GetLedgerHeader(ctx context.Context, sequence uint32) (*LedgerH
 	for attempt := 0; attempt < attempts; attempt++ {
 		resp, err := c.getLedgerHeaderAttempt(ctx, sequence)
 		if err == nil {
-			c.markSuccess(c.HorizonURL)
+			c.markHorizonSuccess()
 			return resp, nil
 		}
 
-		c.markFailure(c.HorizonURL)
+		c.markHorizonFailure()
 
 		failures = append(failures, NodeFailure{URL: c.HorizonURL, Reason: err})
 
@@ -797,6 +854,7 @@ func (c *Client) GetLedgerEntries(ctx context.Context, keys []string) (map[strin
 	// Single batch - use existing failover logic
 	attempts := c.endpointAttempts()
 	for attempt := 0; attempt < attempts; attempt++ {
+
 		fetchedEntries, err := c.getLedgerEntriesAttempt(ctx, keysToFetch)
 		if err == nil {
 			// Merge cached entries with fetched entries
@@ -806,7 +864,7 @@ func (c *Client) GetLedgerEntries(ctx context.Context, keys []string) (map[strin
 			return entries, nil
 		}
 
-		c.markFailure(c.SorobanURL)
+		c.markSorobanFailure()
 
 		if attempt < attempts-1 && len(c.AltURLs) > 1 {
 			logger.Logger.Warn("Retrying with fallback Soroban RPC...", "error", err)
@@ -940,7 +998,6 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keysToFetch []stri
 	logger.Logger.Debug("Fetching ledger entries", "count", len(keysToFetch), "url", targetURL)
 
 	startTime := time.Now()
-
 	// Fail fast if circuit breaker is open for this Soroban endpoint.
 	if !c.isHealthy(targetURL) {
 		err := errors.WrapRPCConnectionFailed(
@@ -948,6 +1005,7 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keysToFetch []stri
 		)
 		// Record failed remote node response
 		metrics.RecordRemoteNodeResponse(targetURL, string(c.Network), false, time.Since(startTime))
+
 		return nil, err
 	}
 
@@ -1006,7 +1064,7 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keysToFetch []stri
 	if rpcResp.Error != nil {
 		// Record failed remote node response
 		metrics.RecordRemoteNodeResponse(targetURL, string(c.Network), false, duration)
-		return nil, errors.WrapRPCError(targetURL, rpcResp.Error.Message, rpcResp.Error.Code)
+		return nil, errors.WrapSorobanError(targetURL, rpcResp.Error.Message, rpcResp.Error.Code)
 	}
 
 	// Record successful remote node response
@@ -1220,11 +1278,11 @@ func (c *Client) SimulateTransaction(ctx context.Context, envelopeXdr string) (*
 	for attempt := 0; attempt < attempts; attempt++ {
 		resp, err := c.simulateTransactionAttempt(ctx, envelopeXdr)
 		if err == nil {
-			c.markSuccess(c.SorobanURL)
+			c.markSorobanSuccess()
 			return resp, nil
 		}
 
-		c.markFailure(c.SorobanURL)
+		c.markSorobanFailure()
 
 		failures = append(failures, NodeFailure{URL: c.SorobanURL, Reason: err})
 
@@ -1319,7 +1377,7 @@ func (c *Client) simulateTransactionAttempt(ctx context.Context, envelopeXdr str
 	}
 
 	if rpcResp.Error != nil {
-		return nil, errors.WrapRPCError(targetURL, rpcResp.Error.Message, rpcResp.Error.Code)
+		return nil, errors.WrapSorobanError(targetURL, rpcResp.Error.Message, rpcResp.Error.Code)
 	}
 
 	return &rpcResp, nil
@@ -1332,11 +1390,11 @@ func (c *Client) GetHealth(ctx context.Context) (*GetHealthResponse, error) {
 	for attempt := 0; attempt < attempts; attempt++ {
 		resp, err := c.getHealthAttempt(ctx)
 		if err == nil {
-			c.markSuccess(c.SorobanURL)
+			c.markSorobanSuccess()
 			return resp, nil
 		}
 
-		c.markFailure(c.SorobanURL)
+		c.markSorobanFailure()
 		failures = append(failures, NodeFailure{URL: c.SorobanURL, Reason: err})
 
 		if attempt < attempts-1 && len(c.AltURLs) > 1 {
@@ -1385,6 +1443,7 @@ func (c *Client) getHealthAttempt(ctx context.Context) (healthResp *GetHealthRes
 
 	// Prefer SorobanURL but fall back to the currently active HorizonURL so that
 	// rotateURL-triggered failovers are reflected in health checks.
+	targetURL = c.SorobanURL
 	if targetURL == "" {
 		targetURL = c.HorizonURL
 	}

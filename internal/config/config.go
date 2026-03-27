@@ -1,18 +1,18 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/dotandev/hintents/internal/errors"
 )
+
+// -- Interfaces --
 
 type Parser interface {
 	Parse(*Config) error
@@ -26,136 +26,7 @@ type Validator interface {
 	Validate(*Config) error
 }
 
-type CompositeValidator struct {
-	validators []Validator
-}
-
-func NewCompositeValidator(validators ...Validator) CompositeValidator {
-	return CompositeValidator{validators: validators}
-}
-
-func (v CompositeValidator) Validate(cfg *Config) error {
-	for _, validator := range v.validators {
-		if err := validator.Validate(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type RequiredFieldsValidator struct{}
-
-func (RequiredFieldsValidator) Validate(cfg *Config) error {
-	if cfg.RpcUrl == "" {
-		return errors.WrapValidationError("rpc_url cannot be empty")
-	}
-	return nil
-}
-
-type NetworkValidator struct{}
-
-func (NetworkValidator) Validate(cfg *Config) error {
-	if cfg.Network != "" && !validNetworks[string(cfg.Network)] {
-		return errors.WrapInvalidNetwork(string(cfg.Network))
-	}
-	return nil
-}
-
-type RequestTimeoutValidator struct{}
-
-const maxRequestTimeout = 300
-
-func (RequestTimeoutValidator) Validate(cfg *Config) error {
-	if cfg.RequestTimeout == 0 {
-		return nil
-	}
-	if cfg.RequestTimeout < 1 || cfg.RequestTimeout > maxRequestTimeout {
-		return errors.WrapValidationError(fmt.Sprintf("request_timeout must be between 1 and %d", maxRequestTimeout))
-	}
-	return nil
-}
-
-type ConfigDefaultsAssigner struct{}
-
-func (ConfigDefaultsAssigner) Apply(cfg *Config) {
-	if cfg.RpcUrl == "" {
-		cfg.RpcUrl = defaultConfig.RpcUrl
-	}
-	if cfg.Network == "" {
-		cfg.Network = defaultConfig.Network
-	}
-	if cfg.SimulatorPath == "" {
-		cfg.SimulatorPath = defaultConfig.SimulatorPath
-	}
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = defaultConfig.LogLevel
-	}
-	if cfg.CachePath == "" {
-		cfg.CachePath = defaultConfig.CachePath
-	}
-	if cfg.RequestTimeout == 0 {
-		cfg.RequestTimeout = defaultRequestTimeout
-	}
-}
-
-type EnvParser struct{}
-
-func (EnvParser) Parse(cfg *Config) error {
-	if v := os.Getenv("ERST_RPC_URL"); v != "" {
-		cfg.RpcUrl = v
-	}
-	if v := os.Getenv("ERST_NETWORK"); v != "" {
-		cfg.Network = Network(v)
-	}
-	if v := os.Getenv("ERST_SIMULATOR_PATH"); v != "" {
-		cfg.SimulatorPath = v
-	} else if v := os.Getenv("ERST_SIM_PATH"); v != "" {
-		cfg.SimulatorPath = v
-	}
-	if v := os.Getenv("ERST_LOG_LEVEL"); v != "" {
-		cfg.LogLevel = v
-	}
-	if v := os.Getenv("ERST_CACHE_PATH"); v != "" {
-		cfg.CachePath = v
-	} else if v := os.Getenv("ERST_CACHE_DIR"); v != "" {
-		cfg.CachePath = v
-	}
-	if v := os.Getenv("ERST_RPC_TOKEN"); v != "" {
-		cfg.RPCToken = v
-	}
-	if v := os.Getenv("ERST_CRASH_ENDPOINT"); v != "" {
-		cfg.CrashEndpoint = v
-	}
-	if v := os.Getenv("ERST_SENTRY_DSN"); v != "" {
-		cfg.CrashSentryDSN = v
-	}
-
-	if v := os.Getenv("ERST_REQUEST_TIMEOUT"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return errors.WrapValidationError("ERST_REQUEST_TIMEOUT must be an integer")
-		}
-		cfg.RequestTimeout = n
-	}
-
-	switch strings.ToLower(os.Getenv("ERST_CRASH_REPORTING")) {
-	case "":
-	case "1", "true", "yes", "on":
-		cfg.CrashReporting = true
-	case "0", "false", "no", "off":
-		cfg.CrashReporting = false
-	default:
-		return errors.WrapValidationError("ERST_CRASH_REPORTING must be a boolean")
-	}
-
-	if urlsEnv := os.Getenv("ERST_RPC_URLS"); urlsEnv != "" {
-		cfg.RpcUrls = splitList(urlsEnv)
-	} else if urlsEnv := os.Getenv("STELLAR_RPC_URLS"); urlsEnv != "" {
-		cfg.RpcUrls = splitList(urlsEnv)
-	}
-
-	return nil
-}
+// -- Types --
 
 type Network string
 
@@ -183,22 +54,31 @@ type Config struct {
 	LogLevel          string   `json:"log_level,omitempty"`
 	CachePath         string   `json:"cache_path,omitempty"`
 	RPCToken          string   `json:"rpc_token,omitempty"`
+	// MaxCacheSize is the maximum size of the source map cache in bytes.
+	MaxCacheSize int64 `json:"max_cache_size,omitempty"`
 	// CrashReporting enables opt-in anonymous crash reporting.
-	// Set via crash_reporting = true in config or ERST_CRASH_REPORTING=true.
 	CrashReporting bool `json:"crash_reporting,omitempty"`
 	// CrashEndpoint is a custom HTTPS URL that receives JSON crash reports.
-	// Set via crash_endpoint in config or ERST_CRASH_ENDPOINT.
 	CrashEndpoint string `json:"crash_endpoint,omitempty"`
 	// CrashSentryDSN is a Sentry Data Source Name for crash reporting.
-	// Set via crash_sentry_dsn in config or ERST_SENTRY_DSN.
 	CrashSentryDSN string `json:"crash_sentry_dsn,omitempty"`
 	// RequestTimeout is the HTTP request timeout in seconds for all RPC calls.
-	// Set via request_timeout in config or ERST_REQUEST_TIMEOUT.
-	// Defaults to 15 seconds.
 	RequestTimeout int `json:"request_timeout,omitempty"`
+	// MaxTraceDepth is the maximum depth of the call tree before it is truncated.
+	MaxTraceDepth int `json:"max_trace_depth,omitempty"`
 }
 
+// -- Constants & Defaults --
+
 const defaultRequestTimeout = 15
+
+var validLogLevels = map[string]bool{
+	"trace": true,
+	"debug": true,
+	"info":  true,
+	"warn":  true,
+	"error": true,
+}
 
 var defaultConfig = &Config{
 	RpcUrl:         "https://soroban-testnet.stellar.org",
@@ -207,57 +87,23 @@ var defaultConfig = &Config{
 	LogLevel:       "info",
 	CachePath:      filepath.Join(os.ExpandEnv("$HOME"), ".erst", "cache"),
 	RequestTimeout: defaultRequestTimeout,
+	MaxCacheSize:   0,
+	MaxTraceDepth:  50,
 }
 
-// GetGeneralConfigPath returns the path to the general configuration file
-func GetGeneralConfigPath() (string, error) {
-	configDir, err := GetConfigPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "config.json"), nil
-}
+// -- Core Functions --
 
-// LoadConfig loads the general configuration from disk (JSON format)
-func LoadConfig() (*Config, error) {
-	configPath, err := GetGeneralConfigPath()
-	if err != nil {
-		return nil, err
-	}
-
-	// If file doesn't exist, return default config
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return DefaultConfig(), nil
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, errors.WrapConfigError("failed to read config file", err)
-	}
-
-	config := DefaultConfig()
-	if err := json.Unmarshal(data, config); err != nil {
-		return nil, errors.WrapConfigError("failed to parse config file", err)
-	}
-
-	return config, nil
-}
-
-// Load loads the configuration from environment variables and TOML files.
-// The lifecycle follows three distinct phases: load, merge defaults, validate.
 func Load() (*Config, error) {
 	cfg := &Config{}
-	parsers := []Parser{fileParser{}, EnvParser{}}
+	parsers := []Parser{fileParser{}, envParser{}}
 	for _, parser := range parsers {
 		if err := parser.Parse(cfg); err != nil {
 			return nil, err
 		}
 	}
 
-	// Phase 2: Merge defaults for any fields still unset.
-	cfg.MergeDefaults()
+	configDefaultsAssigner{}.Apply(cfg)
 
-	// Phase 3: Validate.
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -265,168 +111,74 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-type fileParser struct{}
-
-func (fileParser) Parse(cfg *Config) error {
-	return cfg.loadFromFile()
+func DefaultConfig() *Config {
+	return &Config{
+		RpcUrl:         defaultConfig.RpcUrl,
+		Network:        defaultConfig.Network,
+		SimulatorPath:  defaultConfig.SimulatorPath,
+		LogLevel:       defaultConfig.LogLevel,
+		CachePath:      defaultConfig.CachePath,
+		RequestTimeout: defaultConfig.RequestTimeout,
+		MaxCacheSize:   defaultConfig.MaxCacheSize,
+		MaxTraceDepth:  defaultConfig.MaxTraceDepth,
+	}
 }
 
-func (c *Config) loadFromFile() error {
-	paths := []string{
-		"/etc/erst/config.toml",
+func NewConfig(rpcUrl string, network Network) *Config {
+	return &Config{
+		RpcUrl:         rpcUrl,
+		Network:        network,
+		SimulatorPath:  defaultConfig.SimulatorPath,
+		LogLevel:       defaultConfig.LogLevel,
+		CachePath:      defaultConfig.CachePath,
+		RequestTimeout: defaultConfig.RequestTimeout,
+		MaxCacheSize:   defaultConfig.MaxCacheSize,
+		MaxTraceDepth:  defaultConfig.MaxTraceDepth,
 	}
-
-	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
-		paths = append(paths, filepath.Join(homeDir, ".erst.toml"))
-	}
-	paths = append(paths, ".erst.toml")
-
-	for _, path := range paths {
-		if err := c.loadTOML(path); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return err
-		}
-	}
-
-	return nil
 }
 
-func (c *Config) loadTOML(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
+// -- Config Methods --
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	return c.parseTOML(string(data))
+func (c *Config) MergeDefaults() {
+	configDefaultsAssigner{}.Apply(c)
 }
 
-func (c *Config) parseTOML(content string) error {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(stripInlineComment(line))
-
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		rawVal := strings.TrimSpace(parts[1])
-
-		if key == "rpc_urls" && strings.HasPrefix(rawVal, "[") && strings.HasSuffix(rawVal, "]") {
-			// Basic array parsing for TOML-like lists: ["a", "b"]
-			rawVal = strings.Trim(rawVal, "[]")
-			parts := strings.Split(rawVal, ",")
-			var urls []string
-			for _, p := range parts {
-				item := strings.TrimSpace(strings.Trim(p, "\"'"))
-				if item != "" {
-					urls = append(urls, item)
-				}
-			}
-			c.RpcUrls = urls
-			continue
-		}
-
-		value := strings.Trim(rawVal, "\"'")
-
-		switch key {
-		case "rpc_url":
-			c.RpcUrl = value
-		case "rpc_urls":
-			// Fallback if not an array but comma-separated string
-			c.RpcUrls = splitList(value)
-		case "network":
-			c.Network = Network(value)
-		case "network_passphrase":
-			c.NetworkPassphrase = value
-		case "simulator_path":
-			c.SimulatorPath = value
-		case "log_level":
-			c.LogLevel = value
-		case "cache_path":
-			c.CachePath = value
-		case "rpc_token":
-			c.RPCToken = value
-	case "crash_reporting":
-		switch strings.ToLower(value) {
-		case "true", "1", "yes", "on":
-			c.CrashReporting = true
-		case "false", "0", "no", "off":
-			c.CrashReporting = false
-		default:
-			return errors.WrapValidationError("crash_reporting must be a boolean")
-		}
-		case "crash_endpoint":
-			c.CrashEndpoint = value
-		case "crash_sentry_dsn":
-			c.CrashSentryDSN = value
-		case "request_timeout":
-			n, err := strconv.Atoi(value)
-			if err != nil {
-				return errors.WrapValidationError("request_timeout must be an integer")
-			}
-			c.RequestTimeout = n
-		}
-	}
-
-	return nil
+func (c *Config) WithSimulatorPath(path string) *Config {
+	c.SimulatorPath = path
+	return c
 }
 
-// SaveConfig saves the configuration to disk (JSON format)
-func SaveConfig(config *Config) error {
-	configPath, err := GetGeneralConfigPath()
-	if err != nil {
-		return err
-	}
+func (c *Config) WithLogLevel(level string) *Config {
+	c.LogLevel = level
+	return c
+}
 
-	// Ensure config directory exists
-	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return errors.WrapConfigError("failed to create config directory", err)
-	}
+func (c *Config) WithCachePath(path string) *Config {
+	c.CachePath = path
+	return c
+}
 
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return errors.WrapConfigError("failed to marshal config", err)
-	}
-
-	// Write with restricted permissions (owner only)
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		return errors.WrapConfigError("failed to write config file", err)
-	}
-
-	return nil
+func (c *Config) WithRequestTimeout(timeout int) *Config {
+	c.RequestTimeout = timeout
+	return c
 }
 
 func (c *Config) Validate() error {
-	return RunValidators(c, DefaultValidators())
-}
-
-// MergeDefaults fills zero-value fields with their defaults.
-func (c *Config) MergeDefaults() {
-	if c.RpcUrl == "" {
-		c.RpcUrl = defaultConfig.RpcUrl
+	validators := []Validator{
+		RPCValidator{},
+		NetworkValidator{},
+		SimulatorValidator{},
+		LogLevelValidator{},
+		TimeoutValidator{},
+		MaxTraceDepthValidator{},
+		CrashReportingValidator{},
 	}
-	if c.Network == "" {
-		c.Network = defaultConfig.Network
+	for _, v := range validators {
+		if err := v.Validate(c); err != nil {
+			return err
+		}
 	}
-	if c.LogLevel == "" {
-		c.LogLevel = defaultConfig.LogLevel
-	}
-	if c.CachePath == "" {
-		c.CachePath = defaultConfig.CachePath
-	}
+	return nil
 }
 
 func (c *Config) NetworkURL() string {
@@ -445,80 +197,147 @@ func (c *Config) NetworkURL() string {
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf(
-		"Config{RPC: %s, Network: %s, LogLevel: %s, CachePath: %s}",
-		c.RpcUrl, c.Network, c.LogLevel, c.CachePath,
-	)
+	data, _ := json.MarshalIndent(c, "", "  ")
+	return string(data)
 }
 
-func splitList(value string) []string {
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		item := strings.TrimSpace(part)
-		if item != "" {
-			out = append(out, item)
+// -- Load/Save Config --
+
+func GetGeneralConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".erst", "config.json"), nil
+}
+
+func LoadConfig() (*Config, error) {
+	configPath, err := GetGeneralConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return DefaultConfig(), nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, errors.WrapConfigError("failed to read config file", err)
+	}
+
+	config := DefaultConfig()
+	if err := json.Unmarshal(data, config); err != nil {
+		return nil, errors.WrapConfigError("failed to parse config file", err)
+	}
+
+	return config, nil
+}
+
+func SaveConfig(config *Config) error {
+	configPath, err := GetGeneralConfigPath()
+	if err != nil {
+		return err
+	}
+
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return errors.WrapConfigError("failed to create config directory", err)
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return errors.WrapConfigError("failed to marshal config", err)
+	}
+
+	return os.WriteFile(configPath, data, 0600)
+}
+
+// -- Parsers --
+
+type envParser struct{}
+
+func (envParser) Parse(cfg *Config) error {
+	if v := os.Getenv("ERST_RPC_URL"); v != "" {
+		cfg.RpcUrl = v
+	}
+	if v := os.Getenv("ERST_NETWORK"); v != "" {
+		cfg.Network = Network(v)
+	}
+	if v := os.Getenv("ERST_SIMULATOR_PATH"); v != "" {
+		cfg.SimulatorPath = v
+	}
+	if v := os.Getenv("ERST_LOG_LEVEL"); v != "" {
+		cfg.LogLevel = v
+	}
+	if v := os.Getenv("ERST_CACHE_PATH"); v != "" {
+		cfg.CachePath = v
+	}
+	if v := os.Getenv("ERST_RPC_TOKEN"); v != "" {
+		cfg.RPCToken = v
+	}
+	if v := os.Getenv("ERST_MAX_CACHE_SIZE"); v != "" {
+		n, _ := strconv.ParseInt(v, 10, 64)
+		if n > 0 {
+			cfg.MaxCacheSize = n
 		}
 	}
-	return out
-}
-
-func stripInlineComment(line string) string {
-	inSingle := false
-	inDouble := false
-	for i, ch := range line {
-		if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			continue
-		}
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			continue
-		}
-		if ch == '#' && !inSingle && !inDouble {
-			return strings.TrimSpace(line[:i])
+	if v := os.Getenv("ERST_REQUEST_TIMEOUT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.RequestTimeout = n
 		}
 	}
-	return line
-}
-func DefaultConfig() *Config {
-	return &Config{
-		RpcUrl:         defaultConfig.RpcUrl,
-		Network:        defaultConfig.Network,
-		SimulatorPath:  defaultConfig.SimulatorPath,
-		LogLevel:       defaultConfig.LogLevel,
-		CachePath:      defaultConfig.CachePath,
-		RequestTimeout: defaultConfig.RequestTimeout,
+	if v := os.Getenv("ERST_MAX_TRACE_DEPTH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.MaxTraceDepth = n
+		}
 	}
-}
-
-func NewConfig(rpcUrl string, network Network) *Config {
-	return &Config{
-		RpcUrl:         rpcUrl,
-		Network:        network,
-		SimulatorPath:  defaultConfig.SimulatorPath,
-		LogLevel:       defaultConfig.LogLevel,
-		CachePath:      defaultConfig.CachePath,
-		RequestTimeout: defaultConfig.RequestTimeout,
+	if v := os.Getenv("ERST_CRASH_REPORTING"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.CrashReporting = b
+		}
 	}
+	if v := os.Getenv("ERST_CRASH_ENDPOINT"); v != "" {
+		cfg.CrashEndpoint = v
+	}
+	if v := os.Getenv("ERST_SENTRY_DSN"); v != "" {
+		cfg.CrashSentryDSN = v
+	}
+	if v := os.Getenv("ERST_RPC_URLS"); v != "" {
+		cfg.RpcUrls = splitAndTrim(v)
+	}
+	return nil
 }
 
-func (c *Config) WithSimulatorPath(path string) *Config {
-	c.SimulatorPath = path
-	return c
+type fileParser struct{}
+
+func (fileParser) Parse(cfg *Config) error {
+	return cfg.loadFromFile()
 }
 
-func (c *Config) WithLogLevel(level string) *Config {
-	c.LogLevel = level
-	return c
-}
+// -- Validators --
 
-func (c *Config) WithCachePath(path string) *Config {
-	c.CachePath = path
-	return c
-}
+type RPCValidator struct{}
 
-func (c *Config) WithRequestTimeout(seconds int) *Config {
-	c.RequestTimeout = seconds
-	return c
+type configDefaultsAssigner struct{}
+
+func (configDefaultsAssigner) Apply(cfg *Config) {
+	if cfg.RpcUrl == "" {
+		cfg.RpcUrl = defaultConfig.RpcUrl
+	}
+	if cfg.Network == "" {
+		cfg.Network = defaultConfig.Network
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = defaultConfig.LogLevel
+	}
+	if cfg.CachePath == "" {
+		cfg.CachePath = defaultConfig.CachePath
+	}
+	if cfg.RequestTimeout == 0 {
+		cfg.RequestTimeout = defaultRequestTimeout
+	}
+	if cfg.MaxTraceDepth == 0 {
+		cfg.MaxTraceDepth = 50
+	}
 }

@@ -28,12 +28,12 @@ jobs:
             go_arch: amd64
 
           - os: macOS-Intel
-            runner: macos-13     # Intel runner
+            runner: macos-latest     # Intel runner (fallback to latest if 13 fails)
             binary_suffix: ""
             go_arch: amd64
 
           - os: macOS-Apple-Silicon
-            runner: macos-14     # M-series ARM runner
+            runner: macos-latest     # M-series ARM runner
             binary_suffix: ""
             go_arch: arm64
 

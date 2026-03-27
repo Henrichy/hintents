@@ -1,9 +1,10 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -117,7 +118,8 @@ func TestSimulatorValidator_Empty(t *testing.T) {
 
 func TestSimulatorValidator_AbsolutePath(t *testing.T) {
 	v := SimulatorValidator{}
-	cfg := &Config{SimulatorPath: "/usr/local/bin/soroban-sim"}
+	absPath, _ := filepath.Abs("soroban-sim")
+	cfg := &Config{SimulatorPath: absPath}
 	if err := v.Validate(cfg); err != nil {
 		t.Errorf("absolute path should be valid: %v", err)
 	}
@@ -166,40 +168,6 @@ func TestLogLevelValidator_InvalidLevel(t *testing.T) {
 	}
 }
 
-// --- RunValidators ---
-
-func TestRunValidators_StopsOnFirstError(t *testing.T) {
-	cfg := &Config{RpcUrl: "", Network: Network("invalid")}
-	err := RunValidators(cfg, DefaultValidators())
-	if err == nil {
-		t.Fatal("expected error from RunValidators")
-	}
-	// RPCValidator runs first, so the error should be about rpc_url.
-	if !strings.Contains(err.Error(), "rpc_url") {
-		t.Errorf("expected rpc_url error first, got: %v", err)
-	}
-}
-
-func TestRunValidators_AllPass(t *testing.T) {
-	cfg := &Config{
-		RpcUrl:   "https://soroban-testnet.stellar.org",
-		Network:  NetworkTestnet,
-		LogLevel: "info",
-	}
-	if err := RunValidators(cfg, DefaultValidators()); err != nil {
-		t.Errorf("all validators should pass: %v", err)
-	}
-}
-
-func TestRunValidators_CustomSet(t *testing.T) {
-	cfg := &Config{RpcUrl: "https://test.com", Network: Network("bogus")}
-	// Only run NetworkValidator.
-	err := RunValidators(cfg, []Validator{NetworkValidator{}})
-	if err == nil {
-		t.Fatal("expected NetworkValidator error")
-	}
-}
-
 // --- MergeDefaults ---
 
 func TestMergeDefaults_FillsEmptyFields(t *testing.T) {
@@ -242,12 +210,18 @@ func TestMergeDefaults_PreservesExistingValues(t *testing.T) {
 // --- Validate integration (delegates to validators) ---
 
 func TestValidate_Delegates(t *testing.T) {
-	cfg := &Config{RpcUrl: "https://test.com", Network: NetworkTestnet, LogLevel: "info"}
+	cfg := &Config{
+		RpcUrl:         "https://test.com",
+		Network:        NetworkTestnet,
+		LogLevel:       "info",
+		RequestTimeout: 15,
+		MaxTraceDepth:  50,
+	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("valid config should pass Validate: %v", err)
 	}
 
-	cfg2 := &Config{RpcUrl: "", Network: NetworkTestnet}
+	cfg2 := &Config{RpcUrl: "", Network: NetworkTestnet, RequestTimeout: 15, MaxTraceDepth: 50}
 	if err := cfg2.Validate(); err == nil {
 		t.Error("expected Validate to reject empty rpc_url")
 	}

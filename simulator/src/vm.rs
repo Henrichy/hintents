@@ -1,21 +1,27 @@
-// Copyright 2025 Erst Users
+// Copyright 2026 Erst Users
 // SPDX-License-Identifier: Apache-2.0
 
 use wasmparser::{Operator, Parser, Payload};
 
 pub fn enforce_soroban_compatibility(wasm: &[u8]) -> Result<(), String> {
     for payload in Parser::new(0).parse_all(wasm) {
-        let payload = payload.map_err(|e| e.to_string())?;
+        let payload = payload.map_err(|e| format!("[VM] Wasm parsing: {e}"))?;
         if let Payload::CodeSectionEntry(body) = payload {
-            let mut ops = body.get_operators_reader().map_err(|e| e.to_string())?;
+            let mut ops = body
+                .get_operators_reader()
+                .map_err(|e| format!("[VM] Operator reader init: {e}"))?;
+            let mut offset: usize = 0;
             while !ops.eof() {
-                let op = ops.read().map_err(|e| e.to_string())?;
+                let op = ops
+                    .read()
+                    .map_err(|e| format!("[VM] Instruction read at offset {offset}: {e}"))?;
                 if is_float_op(&op) {
-                    return Err(
-                        "floating-point instructions are not allowed under strict Soroban compatibility"
-                            .to_string(),
-                    );
+                    return Err(format!(
+                        "[VM] Soroban compatibility check at instruction offset {offset}: \
+                         floating-point instructions are not allowed"
+                    ));
                 }
+                offset += 1;
             }
         }
     }
@@ -32,7 +38,5 @@ fn is_float_op(op: &Operator) -> bool {
     // good enough for our compatibility check: any float-related opcode will
     // trigger the `starts_with` condition.
     let name = format!("{:?}", op);
-    name.starts_with("F32") || name.starts_with("F64")
-    let rep = format!("{:?}", op);
-    rep.contains("F32") || rep.contains("F64")
+    name.contains("F32") || name.contains("F64")
 }
