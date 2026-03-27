@@ -1,3 +1,6 @@
+// Copyright (c) Hintents Authors.
+// SPDX-License-Identifier: Apache-2.0
+
     describe('Streaming XDR decoder memory usage', () => {
         it('should stream decode 1000 ledger entries with low peak memory', async () => {
             // Generate 1000 fake base64-encoded LedgerEntry XDRs (simulate real entries)
