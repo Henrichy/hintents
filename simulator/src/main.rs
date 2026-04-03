@@ -152,6 +152,20 @@ fn check_memory_limit_or_panic(host: &Host, memory_limit: Option<u64>) {
     }
 }
 
+fn load_ledger_entries(host: &Host, entries: &HashMap<String, String>) -> Result<usize, String> {
+    let mut loaded_entries = 0usize;
+    for (key_xdr, entry_xdr) in entries {
+        let key = snapshot::decode_ledger_key(key_xdr)
+            .map_err(|e| format!("Failed to parse LedgerKey XDR: {e}"))?;
+        let entry = snapshot::decode_ledger_entry(entry_xdr)
+            .map_err(|e| format!("Failed to parse LedgerEntry XDR: {e}"))?;
+        host.put_ledger_entry(key, entry)
+            .map_err(|e| format!("Failed to inject ledger entry: {e:?}"))?;
+        loaded_entries += 1;
+    }
+    Ok(loaded_entries)
+}
+
 fn execute_operations(
     host: &Host,
     operations: &[Operation],
@@ -508,6 +522,16 @@ fn main() {
 
     let mut loaded_entries_count = 0;
 
+    // Populate Host Storage
+    if let Some(entries) = &request.ledger_entries {
+        match load_ledger_entries(&host, entries) {
+            Ok(count) => {
+                loaded_entries_count += count;
+            }
+            Err(err) => {
+                send_error(err);
+                return;
+            }
     // Populate Host Storage — resolve ledger entries (plain or zstd-compressed).
     let resolved_entries: Option<std::collections::HashMap<String, String>> =
         if let Some(b64) = &request.ledger_entries_zstd {
@@ -1421,5 +1445,42 @@ mod tests {
         assert!(report.contains("FNDA:1,InvokeContract::\"init\""));
         assert!(report.contains("FNF:2"));
         assert!(report.contains("FNH:2"));
+    }
+
+    #[test]
+    fn test_load_ledger_entries_injects_into_host() {
+        use base64::engine::general_purpose::STANDARD;
+        use soroban_env_host::xdr::{
+            ContractDataDurability, ContractDataEntry, Hash, LedgerEntry, LedgerEntryData,
+            LedgerEntryExt, LedgerKey, LedgerKeyContractData, ScAddress, ScVal, WriteXdr,
+        };
+
+        let contract_id = Hash([7u8; 32]);
+        let key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract(contract_id),
+            key: ScVal::U32(5),
+            durability: ContractDataDurability::Persistent,
+        });
+        let entry = LedgerEntry {
+            last_modified_ledger_seq: 99,
+            data: LedgerEntryData::ContractData(ContractDataEntry {
+                ext: soroban_env_host::xdr::ExtensionPoint::V0,
+                contract: ScAddress::Contract(contract_id),
+                key: ScVal::U32(5),
+                durability: ContractDataDurability::Persistent,
+                val: ScVal::U64(9),
+            }),
+            ext: LedgerEntryExt::V0,
+        };
+
+        let mut entries = HashMap::new();
+        entries.insert(
+            STANDARD.encode(key.to_xdr(soroban_env_host::xdr::Limits::none()).unwrap()),
+            STANDARD.encode(entry.to_xdr(soroban_env_host::xdr::Limits::none()).unwrap()),
+        );
+
+        let host = runner::SimHost::new(None, None, None).inner;
+        let count = load_ledger_entries(&host, &entries).expect("failed to load entries");
+        assert_eq!(count, 1);
     }
 }
