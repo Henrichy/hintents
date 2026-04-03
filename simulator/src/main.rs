@@ -275,7 +275,11 @@ fn check_signature_verification_mocks(
     }
 }
 
-fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<CategorizedEvent> {
+fn categorize_events(
+    events: &soroban_env_host::events::Events,
+    cpu: Option<u64>,
+    mem: Option<u64>,
+) -> Vec<CategorizedEvent> {
     events
         .0
         .iter()
@@ -320,6 +324,8 @@ fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<Categoriz
                     data,
                     wasm_instruction,
                     in_successful_contract_call: !e.failed_call,
+                    cpu,
+                    mem,
                     snapshot_id,
                     snapshot_metadata: Some(metadata),
                 },
@@ -707,7 +713,7 @@ fn main() {
             };
 
             categorized_events = match host.get_events() {
-                Ok(evs) => categorize_events(&evs),
+                Ok(evs) => categorize_events(&evs, Some(cpu_insns), Some(mem_bytes)),
                 Err(_) => vec![],
             };
 
@@ -852,7 +858,7 @@ fn main() {
             ];
 
             let _categorized_events = match host.get_events() {
-                Ok(evs) => categorize_events(&evs),
+                Ok(evs) => categorize_events(&evs, Some(cpu_insns), Some(mem_bytes)),
                 Err(_) => vec![],
             };
 
@@ -1273,7 +1279,7 @@ mod tests {
 
         // failed_call = true  →  in_successful_contract_call must be false
         let evs_failed = Events(vec![make_event(true)]);
-        let categorized = categorize_events(&evs_failed);
+        let categorized = categorize_events(&evs_failed, None, None);
         assert_eq!(categorized.len(), 1);
         assert!(
             !categorized[0].event.in_successful_contract_call,
@@ -1282,7 +1288,7 @@ mod tests {
 
         // failed_call = false  →  in_successful_contract_call must be true
         let evs_ok = Events(vec![make_event(false)]);
-        let categorized = categorize_events(&evs_ok);
+        let categorized = categorize_events(&evs_ok, None, None);
         assert_eq!(categorized.len(), 1);
         assert!(
             categorized[0].event.in_successful_contract_call,
@@ -1319,7 +1325,7 @@ mod tests {
             make_typed_event(ContractEventType::Diagnostic),
         ]);
 
-        let cats = categorize_events(&evs);
+        let cats = categorize_events(&evs, None, None);
         assert_eq!(cats[0].category, "Contract");
         assert_eq!(cats[1].category, "System");
         assert_eq!(cats[2].category, "Diagnostic");
