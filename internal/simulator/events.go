@@ -17,6 +17,8 @@ type DiagnosticEvent struct {
 	Data                     string   `json:"data"`
 	InSuccessfulContractCall bool     `json:"in_successful_contract_call"`
 	WasmInstruction          *string  `json:"wasm_instruction,omitempty"`
+	CPU                      *uint64  `json:"cpu,omitempty"`
+	Memory                   *uint64  `json:"mem,omitempty"`
 }
 
 // ParseData decodes the base64-encoded XDR Data into an xdr.ScVal
@@ -53,8 +55,6 @@ func (e *DiagnosticEvent) ParseTopics() ([]xdr.ScVal, error) {
 }
 
 type CategorizedEvent struct {
-	EventType  string   `json:"event_type"`
-	ContractID *string  `json:"contract_id,omitempty"`
-	Topics     []string `json:"topics"`
-	Data       string   `json:"data"`
+	Category string          `json:"category"`
+	Event    DiagnosticEvent `json:"event"`
 }
