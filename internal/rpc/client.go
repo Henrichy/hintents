@@ -136,6 +136,71 @@ func NewClientWithURLsOption(urls []string, net Network, token string) *Client {
 	return client
 }
 
+// rotateURL switches to the next available provider URL, skipping unhealthy ones if possible
+func (c *Client) rotateURL() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.AltURLs) <= 1 {
+		return false
+	}
+
+	// Try to find a healthy URL
+	for i := 0; i < len(c.AltURLs); i++ {
+		c.currIndex = (c.currIndex + 1) % len(c.AltURLs)
+		url := c.AltURLs[c.currIndex]
+		if c.isHealthyLocked(url) {
+			break
+		}
+		// If we've circled back to where we started, just take it
+		if i == len(c.AltURLs)-1 {
+			break
+		}
+	}
+
+	c.HorizonURL = c.AltURLs[c.currIndex]
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = createHTTPClient(c.token, defaultHTTPTimeout, c.middlewares...)
+	}
+	c.Horizon = &horizonclient.Client{
+		HorizonURL: c.HorizonURL,
+		HTTP:       httpClient,
+	}
+	// Keep SorobanURL in sync with the newly selected node so that
+	// Soroban JSON-RPC calls use the same failover endpoint as Horizon.
+	c.SorobanURL = c.AltURLs[c.currIndex]
+
+	logger.Logger.Warn("RPC failover triggered", "new_url", c.HorizonURL)
+	// increment counter under the same lock so readers get a consistent view
+	c.rotateCount++
+	return true
+}
+
+// RotateCount returns the number of times the client has switched
+// to a different Horizon URL via rotateURL.  It is safe for concurrent
+// use.
+func (c *Client) RotateCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.rotateCount
+}
+
+// attempts returns the number of retry attempts for failover loops (at least 1)
+func (c *Client) attempts() int {
+	if len(c.AltURLs) == 0 {
+		return 1
+	}
+	return len(c.AltURLs)
+}
+
+func (c *Client) getHTTPClient() *http.Client {
+	if c.httpClient != nil {
+		return c.httpClient
+	}
+	return http.DefaultClient
+}
+
 func (c *Client) startMethodTimer(ctx context.Context, method string, attributes map[string]string) MethodTimer {
 	if c == nil || c.methodTelemetry == nil {
 		return noopMethodTimer{}
