@@ -61,12 +61,17 @@ func (s *Spinner) Stop() {
 	s.isRunning = false
 	s.mu.Unlock()
 
+	// Signal the goroutine to exit.
 	select {
 	case s.done <- struct{}{}:
 	default:
+		// If the channel is full, someone already signaled it
+		// or the goroutine already exited.
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	// Give the goroutine a moment to receive and clear the line.
+	// In a real implementation, we might want a sync.WaitGroup here.
+	time.Sleep(20 * time.Millisecond)
 }
 
 func (s *Spinner) StopWithMessage(message string) {

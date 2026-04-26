@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -583,13 +584,17 @@ func TestClientWatchTransaction_UsesWebSocketStreaming(t *testing.T) {
 }
 
 func TestClientWatchTransaction_FallsBackWhenWebSocketStreamDrops(t *testing.T) {
+	var mu sync.Mutex
 	upgradeCount := 0
 	httpStatuses := []string{TxStatusPending, TxStatusSuccess}
 	httpIdx := 0
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			mu.Lock()
 			upgradeCount++
+			currentUpgrade := upgradeCount
+			mu.Unlock()
 
 			key := r.Header.Get("Sec-Websocket-Key")
 			accept := wsAcceptKey(key)
@@ -620,7 +625,7 @@ func TestClientWatchTransaction_FallsBackWhenWebSocketStreamDrops(t *testing.T) 
 
 			// First upgrade is the probe. On the actual stream, return one
 			// PENDING update and then drop the connection so polling can resume.
-			if upgradeCount == 1 {
+			if currentUpgrade == 1 {
 				return
 			}
 
@@ -649,11 +654,13 @@ func TestClientWatchTransaction_FallsBackWhenWebSocketStreamDrops(t *testing.T) 
 			return
 		}
 
+		mu.Lock()
 		if httpIdx >= len(httpStatuses) {
 			httpIdx = len(httpStatuses) - 1
 		}
 		status := httpStatuses[httpIdx]
 		httpIdx++
+		mu.Unlock()
 
 		resp := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"status":%q,"ledger":456}}`, status)
 		w.Header().Set("Content-Type", "application/json")
@@ -699,8 +706,11 @@ func TestClientWatchTransaction_FallsBackWhenWebSocketStreamDrops(t *testing.T) 
 	if got := statuses[len(statuses)-1]; got != TxStatusSuccess {
 		t.Fatalf("final status = %q, want %q", got, TxStatusSuccess)
 	}
-	if upgradeCount < 2 {
-		t.Fatalf("expected probe and watch WebSocket upgrades, got %d", upgradeCount)
+	mu.Lock()
+	count := upgradeCount
+	mu.Unlock()
+	if count < 2 {
+		t.Fatalf("expected probe and watch WebSocket upgrades, got %d", count)
 	}
 }
 
