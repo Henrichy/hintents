@@ -16,6 +16,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -292,6 +293,78 @@ func FormatFallback(wasmBytes []byte, failingOffset uint64, contextLines int) st
 	fmt.Fprintf(&b, "\nFailing instruction at offset 0x%x\n", failingOffset)
 
 	return b.String()
+}
+
+// =============================================================================
+// Event cross-referencing
+// =============================================================================
+
+// DiagnosticEventSource is the minimal interface required to cross-reference
+// a diagnostic event against WASM instructions. It matches the WasmInstruction
+// field emitted by the Soroban simulator (a decimal byte-offset string).
+type DiagnosticEventSource interface {
+	// GetWasmInstruction returns the raw WasmInstruction string pointer from
+	// the event, or nil if the event carries no instruction offset.
+	GetWasmInstruction() *string
+}
+
+// EventRef pairs a diagnostic event with the WASM instruction it maps to.
+type EventRef struct {
+	// EventIndex is the position of the event in the original slice.
+	EventIndex int
+	// Offset is the parsed WASM byte offset from the event's WasmInstruction field.
+	Offset uint64
+	// Instruction is the decoded WASM instruction at that offset, or nil if the
+	// offset could not be resolved against the binary.
+	Instruction *Instruction
+}
+
+// CrossReferenceEvents maps each event in events to the WASM instruction at
+// the offset encoded in its WasmInstruction field. Events without a
+// WasmInstruction field are skipped. The returned slice preserves the order of
+// the input events and only contains entries for events that carry an offset.
+//
+// wasmBytes must be a valid WASM module; if it is not, an error is returned
+// before any events are processed.
+func CrossReferenceEvents(wasmBytes []byte, events []DiagnosticEventSource) ([]EventRef, error) {
+	d := NewDisassembler(wasmBytes)
+	if !d.IsValidWasm() {
+		return nil, fmt.Errorf("not a valid WASM module")
+	}
+
+	instructions, err := d.DecodeAll()
+	if err != nil {
+		return nil, fmt.Errorf("decode instructions: %w", err)
+	}
+
+	// Build an offset → instruction index map for O(1) lookup.
+	offsetIndex := make(map[uint64]int, len(instructions))
+	for i, inst := range instructions {
+		offsetIndex[inst.Offset] = i
+	}
+
+	var refs []EventRef
+	for i, ev := range events {
+		raw := ev.GetWasmInstruction()
+		if raw == nil || *raw == "" {
+			continue
+		}
+		offset, err := strconv.ParseUint(*raw, 10, 64)
+		if err != nil {
+			// Unparseable offset — include the ref with a nil instruction so
+			// callers can still see which event had a bad offset.
+			refs = append(refs, EventRef{EventIndex: i, Offset: 0})
+			continue
+		}
+		ref := EventRef{EventIndex: i, Offset: offset}
+		if idx, ok := offsetIndex[offset]; ok {
+			inst := instructions[idx]
+			ref.Instruction = &inst
+		}
+		refs = append(refs, ref)
+	}
+
+	return refs, nil
 }
 
 // =============================================================================
