@@ -6,12 +6,12 @@ package protocolreg
 import (
 	"errors"
 	"fmt"
+	ersterrors "github.com/dotandev/hintents/internal/errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	ersterrors "github.com/dotandev/hintents/internal/errors"
 )
 
 const (
