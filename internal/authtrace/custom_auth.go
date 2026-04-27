@@ -26,11 +26,11 @@ type CustomContractAuthValidator struct {
 }
 
 var customAuthErrorMessages = map[string]string{
-	"AUTH_FAILED":        "Authorization failed: invalid signature",
-	"INVALID_SIGNATURE":  "Authorization failed: invalid signature payload",
-	"SIGNER_NOT_FOUND":   "Authorization failed: signer is not registered",
-	"THRESHOLD_NOT_MET":  "Authorization failed: signer threshold was not met",
-	"RECOVERY_MISMATCH":  "Authorization failed: recovery key mismatch",
+	"AUTH_FAILED":         "Authorization failed: invalid signature",
+	"INVALID_SIGNATURE":   "Authorization failed: invalid signature payload",
+	"SIGNER_NOT_FOUND":    "Authorization failed: signer is not registered",
+	"THRESHOLD_NOT_MET":   "Authorization failed: signer threshold was not met",
+	"RECOVERY_MISMATCH":   "Authorization failed: recovery key mismatch",
 	"INSUFFICIENT_PARAMS": "Authorization failed: insufficient auth parameters",
 }
 
