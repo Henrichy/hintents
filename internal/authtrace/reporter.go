@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -34,6 +35,7 @@ func (r *DetailedReporter) GenerateReport() string {
 	fmt.Fprintf(&sb, "Account: %s\n", r.trace.AccountID)
 	fmt.Fprintf(&sb, "Total Signers: %d\n", r.trace.SignerCount)
 	fmt.Fprintf(&sb, "Valid Signatures: %d\n\n", r.trace.ValidSignatures)
+	r.writeMultiSigRequirement(&sb)
 	if expirationLedger, ok := r.findExpirationLedger(); ok {
 		fmt.Fprintf(&sb, "  Expiration Ledger: %d\n\n", expirationLedger)
 	}
@@ -49,6 +51,8 @@ func (r *DetailedReporter) GenerateReport() string {
 	if len(r.trace.CustomContracts) > 0 {
 		r.writeContracts(&sb)
 	}
+
+	r.writeSignatureWeightSummary(&sb)
 
 	return sb.String()
 }
@@ -123,6 +127,22 @@ func (r *DetailedReporter) writeContracts(sb *strings.Builder) {
 			fmt.Fprintf(sb, "  Error: %s\n", contract.ErrorMsg)
 		}
 	}
+}
+
+func (r *DetailedReporter) writeSignatureWeightSummary(sb *strings.Builder) {
+	var totalProvided uint32
+	for _, event := range r.trace.AuthEvents {
+		if event.EventType == "signature_verification" && event.Status == "valid" {
+			totalProvided += event.Weight
+		}
+	}
+
+	required := r.trace.Thresholds.HighThreshold
+	if required == 0 && len(r.trace.Failures) > 0 {
+		required = r.trace.Failures[0].RequiredWeight
+	}
+
+	fmt.Fprintf(sb, "\nTotal Signature Weight: %d / Required: %d\n", totalProvided, required)
 }
 
 func (r *DetailedReporter) GenerateJSON() ([]byte, error) {
