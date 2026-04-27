@@ -26,6 +26,7 @@ var (
 	ProfileFlag       bool
 	ProfileFormatFlag string
 	DeepLinkFlag      string
+	VersionFlag       bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -52,6 +53,11 @@ Examples:
 
 Get started with 'erst debug --help' or visit the documentation.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if VersionFlag {
+			fmt.Println(Version)
+			os.Exit(0)
+		}
+
 		// Handle deep link probe invocation before anything else.
 		// The doctor command triggers this to verify OS dispatch works.
 		if DeepLinkFlag != "" {
@@ -73,6 +79,7 @@ Get started with 'erst debug --help' or visit the documentation.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Version:       Version,
+	TraverseChildren: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -210,6 +217,13 @@ func init() {
 		"deep-link",
 		"",
 		"Handle an erst:// deep link URL (used internally by the doctor probe)",
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&VersionFlag,
+		"version",
+		"V",
+		false,
+		"Print erst version",
 	)
 	// Hide from normal help output; it is an internal dispatch mechanism.
 	_ = rootCmd.PersistentFlags().MarkHidden("deep-link")
