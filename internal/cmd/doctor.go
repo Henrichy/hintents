@@ -60,6 +60,12 @@ const (
 	DepRPC               DependencyID = "rpc"
 )
 
+const (
+	DirTransactions = "transactions"
+	DirProtocols    = "protocols"
+	DirContracts    = "contracts"
+)
+
 type DependencyStatus struct {
 	ID        DependencyID // NEW: unique identifier for type-safe dispatch
 	Name      string
@@ -384,7 +390,7 @@ func checkCacheDir(verbose bool) DependencyStatus {
 	}
 
 	// Verify subdirectories exist
-	requiredDirs := []string{"transactions", "protocols", "contracts"}
+	requiredDirs := []string{DirTransactions, DirProtocols, DirContracts}
 	for _, subdir := range requiredDirs {
 		path := joinPath(cacheDir, subdir)
 		if _, err := os.Stat(path); err != nil {
